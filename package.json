@@ -1,0 +1,23 @@
+{
+  "name": "insitu.table.js",
+  "version": "1.0.0",
+  "description": "A backbone.js table view wrapper, focusing on easy data input and backbone style datamanipulation and storage.",
+  "main": "insitu_table.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/InSitu-Software/insitu.table.js.git"
+  },
+  "keywords": [
+    "backbone",
+    "table"
+  ],
+  "author": "Sebastian Gabbert <sebastian.gabbert@insitu.de>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/InSitu-Software/insitu.table.js/issues"
+  },
+  "homepage": "https://github.com/InSitu-Software/insitu.table.js#readme"
+}
