@@ -19,5 +19,11 @@
   "bugs": {
     "url": "https://github.com/InSitu-Software/insitu.table.js/issues"
   },
+  "dependencies": {
+    "underscore": ">=1.8.3",
+    "backbone": ">=1.2.3",
+    "insitu.underscore": "InSitu-Software/insitu.underscore.js",
+    "insitu.backbone": "InSitu-Software/insitu.backbone.js",
+  },
   "homepage": "https://github.com/InSitu-Software/insitu.table.js#readme"
 }
