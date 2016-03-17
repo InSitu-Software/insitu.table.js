@@ -18,7 +18,14 @@ insitu.Views.TableCell = insitu.Views.Base.extend({
 	},
 
 	_getCellView: function(){
-		return this.data.view || this.column.view || this.table.cellView;
+		var view;
+		_.any([this.data, this.column, this.table], function(where){
+			if(_.isset(where) && _.isObject(where) && (_.isset(where.view) || _.isset(where.cellView))){
+				view = where.view || where.cellView;
+			}
+		}, this);
+
+		return view;
 	},
 
 	render: function(){
