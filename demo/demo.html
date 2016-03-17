@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+	<style>
+		table, tr, td{
+			border: 1px solid #000;
+		}
+	</style>
+</head>
+
+<body>
+
+	<h1>Simple Array input</h1>
+	<div id="simple"></div>
+
+	<h1>Simple Array Input with ColumnLabelCallback</h1>
+	<div id="simpleWithHeader"></div>
+
+	<h1>Simple Array with Row Labels</h1>
+	<div id="simpleRowLabel"></div>
+
+	<h1>Colspecific Views</h1>
+	<div id="colViews"></div>
+
+	<h1>BB Collection as Rows Input</h1>
+	<div id="bbcollection"></div>
+
+
+
+
+	<script src="deps/jquery-2.2.1.js"></script>
+
+	<script src="deps/underscore.js"></script>
+	<script src="deps/insitu.underscore.js"></script>
+
+	<script src="deps/backbone.js"></script>
+	<script src="deps/insitu.backbone.js"></script>
+
+	<script src="deps/insitu_skeleton.js"></script>
+	<script src="deps/insitu_view_base.js"></script>
+
+	<script src="../insitu_table.js"></script>
+
+	<script type="application/javascript">
+		var columns = [
+			"Marke",
+			"Modell",
+			"Preis"
+		];
+
+
+		var simpleSampleData = [
+			["Alfa Romeo", "4C", "50.500"],
+			["Renault", "Clio IV", "9.990"],
+			["Morgan", "Threewheeler Gen.2", "42.300"]
+		];
+
+		var simpleTableData = {
+			rows: simpleSampleData,
+			columns : columns
+		};
+
+		new insitu.Views.Table(
+			_.extend(_.clone(simpleTableData), {
+				el: document.getElementById("simple")
+			})
+		).render();
+
+		new insitu.Views.Table(
+			_.extend(_.clone(simpleTableData), {
+				el: document.getElementById("simpleWithHeader"),
+				columnLabelCallback: function(data){
+					return data.split("").reverse().join("");
+				}
+			})
+		).render();
+
+		new insitu.Views.Table(
+			_.extend(_.clone(simpleTableData), {
+				el: document.getElementById("simpleRowLabel"),
+				rowLabelCallback: function(rowData){
+					switch(rowData[0]){
+						case "Alfa Romeo": 	return "sch&ouml;nes Auto";
+						case "Renault": 	return "So'n Franzose";
+						case "Morgan": 		return "Fancy";
+					}
+				}
+			})
+		).render();
+
+		new insitu.Views.Table(
+			_.extend(_.clone(simpleTableData), {
+				el: document.getElementById("colViews"),
+				columns: [
+					"Marke",
+					"Modell",
+					{
+						label: "Preis",
+						view: Backbone.View.extend({
+							initialize: function(data){
+								_.extend(this, data);
+							},
+							render: function(){
+								this.$el.append(this.data + " &euro;");
+								return this;
+							}
+						})
+					}
+				]
+			})
+		).render();
+
+
+
+
+		// BB Collection Input Data
+
+		var input = [
+			{
+				make: "Alfa Romeo",
+				modell: "4C",
+				price: 50500
+			},
+			{
+				make: "Renault",
+				modell: "Clio IV",
+				price: 9990
+			},
+			{
+				make: "Morgan",
+				modell: "Threewheeler Gen.2",
+				price: 42300
+			}
+		];
+
+		var BB_Input = new Backbone.Collection( input );
+		BB_Input.comparator = "price";
+		BB_Input.sort();
+
+		new insitu.Views.Table(
+			{
+				el: document.getElementById("bbcollection"),
+				rows: BB_Input,
+				columns: [
+					{
+						label: "Marke",
+						id: "make"
+					},
+					{
+						label: "Modell",
+						id: "modell"
+					},
+					{
+						label: "Preis",
+						id: "price"
+					}
+				]
+			}
+		).render();
+
+
+
+	</script>
+</body>

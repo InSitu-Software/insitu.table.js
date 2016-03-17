@@ -1,0 +1,5 @@
+insitu =  {
+	Models: {},
+	Views: {},
+	Collections: {}
+};

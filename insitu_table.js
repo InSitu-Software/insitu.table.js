@@ -1,342 +1,319 @@
 
-/*
-Zwei Varianten die Spalten zu definieren.
-Zum ersten kann ein gemeinsamer View für alle Zellen
-gesetzt werden (columnCommonView).
-Alternativ können _alle_ Spalten einzeln als "columns" definiert werden.
-Hier wird eine List mit Objekten erwartet die min. "header" und "view" definiert
-haben.
-In jedem Fall wird die Menge an Spalten aus der Menge der Elemente aus "columns"
-definiert. Die Header werden aus dem "columnLabelCallback" definiert. Der als
-Standardfall einfach das aktuelle columns-Element ausgibt.
-Intern verwertete Werte pro column-Element sind {view};
-Falls View gesetzt ist, wird die Zelle aus diesem View generiert. Falls kein
-view gesetzt ist, wird auf columnCommonView zurückgegriffen.
 
-In jedem Fall wird eine Liste mit Werten in "rows" erwartet. Für jede Zeile ist ein
-Datum in der Liste erwartet.
-Das Zeilenlabel wird aus "rowLabelCallback(rows[i])" erzeugt, die Daten, die an
-den Zellenview übergeben werden sind entweder die kompletten Zeilendaten aus rows[i]
-oder, falls columDataFilterCallback definiert ist, der Rückgabewert aus
-"cellDataFilterCallback(rows[i], columns[j])". Wobei columns[j] entweder das
-aktuelle Spaltenelemen aus columns ist oder
 
- */
 
-insitu.Models.TableCell = Backbone.Model.extend({
+
+insitu.Views.TableCell = insitu.Views.Base.extend({
+	template: _.template("<td></td>"),
+
 	defaults: {
-		model: 		undefined,
-		data: 		undefined,
-		view: 		undefined,
-		columnId: 	undefined
+		parent: undefined,
+		data: undefined,
+		table: undefined,
+		column: undefined
+	},
+
+	initialize: function(data){
+		this._fillWithDefault(this, data);
+	},
+
+	_getCellView: function(){
+		return this.data.view || this.column.view || this.table.cellView;
+	},
+
+	render: function(){
+		var $el = $(this.template({}));
+
+		var cellView = this._getCellView();
+
+		if(_.isset(cellView) && _.isFunction(cellView)){
+			this.appendSubview(
+				cellView,
+				{
+					data: this.data,
+					table: this.table
+				},
+				$el
+			);
+		}else{
+			$el.append( this.data.label || this.data );
+		}
+
+
+		this.reSetElement($el);
+		return this;
+	}
+
+});
+
+insitu.Views.TableHeaderCell = insitu.Views.TableCell.extend({
+	template: _.template("<th></th>"),
+
+	_getCellView: function(){
+		return _.isset(this.table.columnHeaderView)
+			? this.table.columnHeaderView
+			: false;
 	}
 });
 
-insitu.Collections.TableCells = Backbone.Collection.extend({
-	model: insitu.Models.TableCell
-});
 
-insitu.Models.TableRow = Backbone.Model.extend({
-	idAttribute: "rowKey",
 
-	defaults: function(){
-		return {
-			rowKey: undefined,
-			rawData: undefined,
-			cells: new insitu.Collections.TableCells()
-		};
+
+insitu.Views.TableRow = insitu.Views.Base.extend({
+	template: _.template("<tr></tr>"),
+
+	defaults: {
+		data: undefined,
+		table: undefined,
+		parent: undefined
+	},
+
+	initialize: function(data){
+		this._fillWithDefault(this, data);
+	},
+
+	render: function(){
+		var $el = $(this.template({}));
+
+		if(_.isset(this.table.rowLabelCallback) && _.isFunction( this.table.rowLabelCallback )){
+			this.appendSubview(
+				insitu.Views.TableHeaderCell,
+				{
+					data: this.table.rowLabelCallback.call(this.context, this.data),
+					table: this.table
+				},
+				$el
+			);
+		}
+
+		this.table.columns.each(function(column, index){
+			var cellData = this._getCellData(column, index);
+
+			this.appendSubview(
+				insitu.Views.TableCell,
+				{
+					data: 	cellData,
+					table: 	this.table,
+					column: column
+				},
+				$el
+			);
+		}, this);
+
+		this.reSetElement($el);
+		return this;
+	},
+
+	_getCellData: function(column, index){
+		if(_.isset(this.table.rowDataCellFilter) && _.isFunction( this.table.rowDataCellFilter )){
+			return this.table.rowDataCellFilter.call(this.table.context, this.data, column);
+		}
+
+		if( (this.data instanceof Backbone.Model) && _.isset(column.id) ){
+			return this.data.get(column.id);
+		}
+
+		if( _.isArray( this.data ) ){
+			return this.data[ index ];
+		}
+
 	}
+
 });
 
-insitu.Collections.TableRows = Backbone.Collection.extend({
-	model: insitu.Models.TableRow
-});
+
 
 
 
 insitu.Views.Table = insitu.Views.Base.extend({
 
-	tagName: "table",
+	template: _.template('<table class="insitutable"><thead></thead><tbody></tbody></table>'),
 
-	defaults: {
-		parent: undefined,
+	defaults: function(){
+		return {
+			////////////////
+			// input data //
+			////////////////
 
-		tableCustomColumnPreHeader: undefined,
-		tableCustomColumnPostHeader: undefined,
+			// unstructured data, implies defining rawDataRowFilter abd
+			rawData: undefined,
 
-		columns: undefined,
-		columnCommonView: undefined,
-		columnLabelCallback: undefined,
+			// data input by row, so we expect an iterable data structure
+			// in which every iteratee describes on row
+			// rowData: undefined,
 
-		baseData: undefined,
 
-		rowDataFilterCallback: undefined,
-		cellDataFilterCallback: undefined,
+			//////////////////////
+			// filter functions //
+			//////////////////////
 
-		rows: undefined,
+			// this one filters a unstructured bunch of input data
+			// to get data per row.
+			// Only applies to "rawData", is obsolet if we get "rowData"
+			rawDataRowFilter: undefined,
 
-		rowLabelLabel: undefined,
-		rowLabelCallback: undefined,
+			// operates on filter rowData and excerpts data needed for this cell
+			// cell = rowData X column definition
+			rowDataCellFilter: undefined,
 
-		colgroupDefintion: undefined,
+			//////////////////////////////
+			// row / column definitions //
+			//////////////////////////////
+			// row and column definition follow this structure:
+			// [
+			// 	{
+			// 		label: 	optional, if not present row/columnLabelCallback will be invoked
+			// 		id: 	needed on columns, on parameter for filterFunction
+			// 		view: 	n/a for row, column can specify a distinct BB-View for this column,
+			// 				if not set, "cellView" is used
+			// 		data: 	n/a for columns, if set for rows, no filtering etc is done, this
+			// 				value is plainly outputed / given to cellView
+			// 	},
+			// 	{}
+			// ]
 
-		sortable: false
+			rows: undefined,	// optional
+			columns: undefined, // necessary
+
+			//////////////
+			// Callback //
+			//////////////
+
+			columnLabelCallback: undefined,
+			rowLabelCallback: undefined,
+
+
+			/////////////////////
+			// common cellView //
+			/////////////////////
+
+			// if not defined and not special column-view is defined,
+			// output of cellFilter will be plainly written into the cell
+			cellView: undefined,
+
+
+			//////////////////////
+			// Static additions //
+			//////////////////////
+			// static HTML or callback output, which will be
+
+			// appended before internal header generation, but in <thead>
+			columnPreHeader: undefined,
+
+			// append after internal header generation, but in <thead>
+			columnPostHeader: undefined,
+
+			// appended colGroupDefinition, for table styling
+			colgroupDefintion: undefined,
+
+			//////////////////////////////
+			// optional functionalities //
+			//////////////////////////////
+			sortable: false,		// Enable / Disable column sorter
+			columnHeader: false,	// render column header, based von this.columns or columnLabelCallback
+			rowHeader: false,
+
+			//////////////////
+			// housekeeping //
+			//////////////////
+			parent: undefined,
+			context: this
+		};
 	},
+
 
 	events: {
 		"click th.col_header": "_handleSortClick"
 	},
 
-	_pluralizedData: [
+
+	_pluralizeableData: [
 		"columns",
-		"rows"
+		"rows",
+		"rawData",
 	],
 
-	initialize: function(options){
-		this._fillWithDefault(this, options);
 
-		_.each(this._pluralizedData, function(key){
-			if(
-				_.isset( this[key] )
-				&&
-				!(this[key] instanceof Backbone.Collection)
-			){
-				this[key] = _.pluralize( this[key] );
-			}
-
-		}, this);
-	},
-
-	_getColId: function(col){
-		return _.isObject(col) && _.isset(col.id)
-			? col.id
-			: col;
-	},
-
-	_sortByColId: function(bodyData){
-		var columnId = this.sortByColId;
-		bodyData.sortType = "natural";
-		bodyData.comparator = function(m){
-			var cellData = m.get("cells").findWhere({ columnId: columnId });
-			return _.isset(cellData.get("model"))
-				? cellData.get("model")
-				: cellData.get("data");
-		};
-		bodyData.sort();
-
-		if(this.reverseSorting){
-			bodyData.reverse();
-		}
-
-		return bodyData;
-	},
-
-	_generateRowData: function(){
-		var rowsData = new insitu.Collections.TableRows();
-
-		this.rows.each(function( row ){
-			var filteredRowData = _.isset(this.rowDataFilterCallback)
-				? this.rowDataFilterCallback.call(this.context, row, this.baseData)
-				: row;
-			rowsData.add( this._generateSingleRowData( filteredRowData, row ) );
+	initialize: function(data){
+		this._fillWithDefault(this, data);
+		_.each(this._pluralizeableData, function(key){
+			this[key] = _.isset( this[key] ) && !( this[key] instanceof Backbone.Collection )
+				? _.pluralize( this[key] )
+				: this[key] || undefined;
 		}, this);
 
-		return rowsData;
 	},
 
-	_generateSingleRowData: function(filteredRowData, rawRowData){
-		var row = new insitu.Models.TableRow({
-			rowKey: filteredRowData.id,
-			rawData: rawRowData
-		});
-
-		var cells = new insitu.Collections.TableCells();
-
-		this.columns.each(function(col){
-			var cellData = _.isset(this.cellDataFilterCallback)
-				? this.cellDataFilterCallback.call(this.context, filteredRowData, rawRowData, col)
-				: filteredRowData;
-
-			cellData = (cellData instanceof Backbone.Model)
-				? { model: cellData }
-				: { data:  cellData };
-
-			cellData.view = _.isset( col.view )
-				? col.view
-				: this.columnCommonView;
-
-			cellData.columnId = this._getColId(col);
-
-			cells.add( cellData );
-
-		}, this);
-
-		row.set("cells", cells);
-
-		return row;
-	},
-
-	// Todo: separate data creation and rendering
-    _renderHeader: function(){
-        var $thead = $("<thead>");
-
-        if(this.sortable){
-            $thead.addClass("sortable");
-        }
-
-        // Prepend Columnheader if columnLabelCallback is defined
-        if( _.isset( this.columnLabelCallback ) ){
-
-
-            if(_.isset( this.tableCustomColumnPreHeader )){
-                $thead.append( _.isFunction(this.tableCustomColumnPreHeader)
-                    ? this.tableCustomColumnPreHeader.call(this.context)
-                    : this.tableCustomColumnPreHeader
-                );
-            }
-
-            var $tr = $("<tr>");
-
-            // First cell over rowLabels
-            if(_.isset( this.rowLabelCallback )){
-                $tr.append( _.isset(this.rowLabelLabel)
-                    ? this.rowLabelLabel
-                    : "<th></th>"
-                );
-            }
-
-            this.columns.each(function(col){
-                var $th = $("<th>");
-                $th.addClass("col_header");
-
-                if(this.sortable){
-                    var $sortIndicator = $("<div>").addClass("sortIndicator");
-
-                    if(this.sortByColId === this._getColId(col)){
-                        $sortIndicator.addClass(
-                            this.reverseSorting
-                                ? "descending"
-                                : "ascending"
-                        );
-                    }else{
-                        $sortIndicator.addClass("unsorted");
-                    }
-
-                    $th.append($sortIndicator);
-                }
-
-                $th.data(
-                    "columnId",
-                    this._getColId(col)
-                );
-
-                if(col !== ""){
-                    $th.append( this.columnLabelCallback.call(this.context, col) );
-                }
-
-                $tr.append($th);
-            }, this);
-
-            $thead.append($tr);
-
-            if(_.isset(this.tableCustomColumnPostHeader)){
-                $thead.append( _.isFunction(this.tableCustomColumnPostHeader)
-                    ? this.tableCustomColumnPostHeader.call(this.context)
-                    : this.tableCustomColumnPostHeader
-                );
-            }
-
-
-        }
-        return $thead;
-    },
-
-	// TODO: Wrapping in Subview
-	_renderBody: function(bodyData){
-		var $tbody = $("<tbody>");
-
-		if(_.isset(this.sortByColId)){
-			bodyData = this._sortByColId( bodyData );
-		}
-
-		bodyData.each(function(singleRowData, rowKey){
-			var $tr = $("<tr>");
-			if(_.isset(this.rowLabelCallback)){
-				var rowLabel = this.rowLabelCallback.call(this.context, singleRowData, rowKey, this);
-				$tr.append( $("<th>").append( rowLabel ) );
-			}
-
-			singleRowData.get("cells").each(function(singleCellData){
-				var $td = $("<td>");
-
-				var view = singleCellData.get("view");
-				var viewData = {
-					data: singleCellData.get("data"),
-					model: singleCellData.get("model")
-				};
-
-				var renderedView =this.appendSubview(
-					view,
-					viewData,
-					$td
-				);
-				// $td.append( new view(viewData).render().$el );
-				$tr.append($td);
-			}, this);
-
-			$tbody.append($tr);
-		}, this);
-
-		return $tbody;
-	},
 
 	render: function(){
-		var rowData = this._generateRowData();
+		var $el = $(this.template({}));
+		var $tbody = $el.find("tbody");
+		var $thead = $el.find("thead");
 
-		var $table = $("<table>");
+		// Headerrenderer
+		this._renderHeader($thead);
 
-		if(_.isset(this.colgroupDefintion)){
-			$table.append(this.colgroupDefintion);
+		// Bodyrenderer
+		if(
+			_.isset( this.rows )
+		){
+			this._renderByRows($tbody);
+
+		}else if( _.isset( this.rawData ) ){
+			this._renderByRawData($tbody);
 		}
 
-		// Header
-		var $header = this._renderHeader();
-		$table.append($header);
-
-
-		// Body
-		var $body = this._renderBody( rowData );
-		$table.append($body);
-
-
-		this.reSetElement( $table );
-
+		this.reSetElement($el);
 		return this;
 	},
 
-	_handleSortClick: function(event){
-		if(!this.sortable){
-			return false;
+
+	_renderByRows: function($el){
+		this.rows.each(function(rowData){
+
+			this.appendSubview(
+				insitu.Views.TableRow,
+				{
+					data: 	rowData,
+					table: 	this
+				},
+				$el
+			);
+		}, this);
+	},
+
+
+	_renderByRawData: function(){
+
+	},
+
+
+	_renderHeader: function($el){
+		if(_.isset(this.rowLabelCallback)){
+			this.appendSubview(
+				insitu.Views.TableHeaderCell,
+				{table: this, data: ""},
+				$el
+			);
 		}
 
-		var $target = $(event.target);
+		this.columns.each(function(column, index){
 
-		var columnId = $target.prop("tagName") === "TH"
-			? $target.data("columnId")
-			: $target.parents("th").data("columnId");
+			var colLabel = _.isset(this.columnLabelCallback) && _.isFunction(this.columnLabelCallback)
+				? this.columnLabelCallback.call(this.context, column)
+				: column;
 
-		if(this.sortByColId === columnId){
-			this.reverseSorting = !this.reverseSorting;
-		}else{
-			this.sortByColId = columnId;
-			this.reverseSorting = false;
-		}
-
-		this.render();
-
+			this.appendSubview(
+				insitu.Views.TableHeaderCell,
+				{
+					data: colLabel,
+					table: this
+				},
+				$el
+			);
+		}, this);
 	}
 
 
 });
-
 
