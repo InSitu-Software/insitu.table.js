@@ -1,5 +1,5 @@
 {
-  "name": "insitu.table.js",
+  "name": "insitu.table",
   "version": "1.0.0",
   "description": "A backbone.js table view wrapper, focusing on easy data input and backbone style datamanipulation and storage.",
   "main": "insitu_table.js",
