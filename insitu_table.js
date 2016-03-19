@@ -143,7 +143,7 @@ insitu.Views.Table = insitu.Views.Base.extend({
 			////////////////
 
 			// unstructured data, implies defining rawDataRowFilter abd
-			rawData: undefined,
+			// rawData: undefined,
 
 			// data input by row, so we expect an iterable data structure
 			// in which every iteratee describes on row
@@ -157,7 +157,7 @@ insitu.Views.Table = insitu.Views.Base.extend({
 			// this one filters a unstructured bunch of input data
 			// to get data per row.
 			// Only applies to "rawData", is obsolet if we get "rowData"
-			rawDataRowFilter: undefined,
+			// rawDataRowFilter: undefined,
 
 			// operates on filter rowData and excerpts data needed for this cell
 			// cell = rowData X column definition
@@ -261,13 +261,8 @@ insitu.Views.Table = insitu.Views.Base.extend({
 		this._renderHeader($thead);
 
 		// Bodyrenderer
-		if(
-			_.isset( this.rows )
-		){
+		if( _.isset( this.rows ) ){
 			this._renderByRows($tbody);
-
-		}else if( _.isset( this.rawData ) ){
-			this._renderByRawData($tbody);
 		}
 
 		this.reSetElement($el);
@@ -290,9 +285,9 @@ insitu.Views.Table = insitu.Views.Base.extend({
 	},
 
 
-	_renderByRawData: function(){
+	// _renderByRawData: function(){
 
-	},
+	// },
 
 
 	_renderHeader: function($el){
