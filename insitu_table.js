@@ -1,10 +1,8 @@
 
-
-
-
-
 insitu.Views.TableCell = insitu.Views.Base.extend({
 	template: _.template("<td></td>"),
+
+	className: undefined,
 
 	defaults: {
 		parent: undefined,
@@ -38,7 +36,7 @@ insitu.Views.TableCell = insitu.Views.Base.extend({
 				cellView,
 				{
 					data: this.data,
-					table: this.table
+					table: this.table,
 				},
 				$el
 			);
@@ -46,7 +44,7 @@ insitu.Views.TableCell = insitu.Views.Base.extend({
 			$el.append( this.data.label || this.data );
 		}
 
-
+		$el.addClass(this.className);
 		this.reSetElement($el);
 		return this;
 	}
@@ -56,10 +54,31 @@ insitu.Views.TableCell = insitu.Views.Base.extend({
 insitu.Views.TableHeaderCell = insitu.Views.TableCell.extend({
 	template: _.template("<th></th>"),
 
+	events: {
+		"click": "_handleClick"
+	},
+
+	initialize: function(data){
+		this._fillWithDefault(this, data);
+
+		if( this.table.sortable ){
+			this.className = "sortable";
+		}
+	},
+
 	_getCellView: function(){
 		return _.isset(this.table.columnHeaderView)
 			? this.table.columnHeaderView
 			: false;
+	},
+
+	_handleClick: function(event){
+		if(!this.table.sortable){
+			return false;
+		}
+
+		event.stopPropagation();
+		this.table.sortByColumn(this);
 	}
 });
 
@@ -74,6 +93,8 @@ insitu.Views.TableRow = insitu.Views.Base.extend({
 		table: undefined,
 		parent: undefined
 	},
+
+	cellData: undefined,
 
 	initialize: function(data){
 		this._fillWithDefault(this, data);
@@ -123,7 +144,11 @@ insitu.Views.TableRow = insitu.Views.Base.extend({
 		if( _.isArray( this.data ) ){
 			return this.data[ index ];
 		}
+	},
 
+	getDataByColumn: function(column){
+		var index = this.table.columns.indexOf( column.data );
+		return this._getCellData( column.data, index );
 	}
 
 });
@@ -135,6 +160,7 @@ insitu.Views.TableRow = insitu.Views.Base.extend({
 insitu.Views.Table = insitu.Views.Base.extend({
 
 	template: _.template('<table class="insitutable"><thead></thead><tbody></tbody></table>'),
+
 
 	defaults: function(){
 		return {
@@ -217,6 +243,10 @@ insitu.Views.Table = insitu.Views.Base.extend({
 			// optional functionalities //
 			//////////////////////////////
 			sortable: false,		// Enable / Disable column sorter
+			sortNatural: false,		// use defaultSorter, but sort natural, requires: https://gist.github.com/kjantzer/7027717
+			sortCallback: undefined,// optional sortCallback function, gets array of row-Views and data-extraction callback
+
+
 			columnHeader: false,	// render column header, based von this.columns or columnLabelCallback
 			rowHeader: false,
 
@@ -226,11 +256,6 @@ insitu.Views.Table = insitu.Views.Base.extend({
 			parent: undefined,
 			context: this
 		};
-	},
-
-
-	events: {
-		"click th.col_header": "_handleSortClick"
 	},
 
 
@@ -254,15 +279,15 @@ insitu.Views.Table = insitu.Views.Base.extend({
 
 	render: function(){
 		var $el = $(this.template({}));
-		var $tbody = $el.find("tbody");
-		var $thead = $el.find("thead");
+		this.$tbody = $el.find("tbody");
+		this.$thead = $el.find("thead");
 
 		// Headerrenderer
-		this._renderHeader($thead);
+		this._renderHeader(this.$thead);
 
 		// Bodyrenderer
 		if( _.isset( this.rows ) ){
-			this._renderByRows($tbody);
+			this._renderByRows(this.$tbody);
 		}
 
 		this.reSetElement($el);
@@ -271,9 +296,15 @@ insitu.Views.Table = insitu.Views.Base.extend({
 
 
 	_renderByRows: function($el){
+
+		if(this.sortable && _.isset( this.sortByColId )){
+
+		}
+
+		this.rowViews = [];
 		this.rows.each(function(rowData){
 
-			this.appendSubview(
+			var rowView = this.appendSubview(
 				insitu.Views.TableRow,
 				{
 					data: 	rowData,
@@ -281,12 +312,14 @@ insitu.Views.Table = insitu.Views.Base.extend({
 				},
 				$el
 			);
+
+			this.rowViews.push( rowView );
+
 		}, this);
 	},
 
 
 	// _renderByRawData: function(){
-
 	// },
 
 
@@ -308,14 +341,44 @@ insitu.Views.Table = insitu.Views.Base.extend({
 			this.appendSubview(
 				insitu.Views.TableHeaderCell,
 				{
-					data: colLabel,
-					table: this
+					data: 		colLabel,
+					table: 		this,
+					column: 	column
 				},
 				$el
 			);
 		}, this);
-	}
+	},
 
+
+	sortByColumn: function(column){
+		if(this.sortColumn === column){
+			this.sortReverse = !this.sortReverse;
+		}else{
+			this.sortReverse = false;
+			this.sortColumn = column;
+		}
+
+		var sorter = _.isset(this.sortCallback)
+			? this.sortCallback
+			: this.sortNatural && _.isset(_.sortByNat)
+				? _.sortByNat
+				: _.sortBy;
+
+		this.$tbody.html("");
+		this.rowViews = sorter( this.rowViews, function(rowView){
+			return rowView.getDataByColumn(column);
+		}, this );
+
+		if(this.sortReverse){
+			this.rowViews.reverse();
+		}
+
+		_.each(this.rowViews, function(rV){
+			this.$tbody.append(rV.$el);
+		}, this);
+
+	},
 
 });
 
