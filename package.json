@@ -1,6 +1,6 @@
 {
   "name": "insitu.table",
-  "version": "2.1.1",
+  "version": "2.1.2",
   "description": "A backbone.js table view wrapper, focusing on easy data input and backbone style datamanipulation and storage.",
   "main": "insitu_table.js",
   "scripts": {

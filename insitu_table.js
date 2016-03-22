@@ -147,8 +147,8 @@ insitu.Views.TableRow = insitu.Views.Base.extend({
 	},
 
 	getDataByColumn: function(column){
-		var index = this.table.columns.indexOf( column.data );
-		return this._getCellData( column.data, index );
+		var index = this.table.columns.indexOf( column.column );
+		return this._getCellData( column.column, index );
 	}
 
 });
@@ -365,9 +365,15 @@ insitu.Views.Table = insitu.Views.Base.extend({
 				? _.sortByNat
 				: _.sortBy;
 
+
 		this.$tbody.html("");
 		this.rowViews = sorter( this.rowViews, function(rowView){
-			return rowView.getDataByColumn(column);
+			var data = rowView.getDataByColumn(column);
+			if( this.sortNatural && _.isString(data) ){
+				data = data.toUpperCase();
+			}
+
+			return data;
 		}, this );
 
 		if(this.sortReverse){
