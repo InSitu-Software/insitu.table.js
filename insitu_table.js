@@ -78,7 +78,7 @@ insitu.Views.TableHeaderCell = insitu.Views.TableCell.extend({
 		}
 
 		event.stopPropagation();
-		this.table.sortByColumn(this);
+		this.table.sortByColumn(this.column);
 	}
 });
 
@@ -88,13 +88,15 @@ insitu.Views.TableHeaderCell = insitu.Views.TableCell.extend({
 insitu.Views.TableRow = insitu.Views.Base.extend({
 	template: _.template("<tr></tr>"),
 
-	defaults: {
-		data: undefined,
-		table: undefined,
-		parent: undefined
+	defaults: function(){
+		return {
+			data: 				undefined,
+			table: 				undefined,
+			parent: 			undefined,
+			visible: 			true,
+			_columnDataHash: 	{}
+		};
 	},
-
-	cellData: undefined,
 
 	initialize: function(data){
 		this._fillWithDefault(this, data);
@@ -132,34 +134,193 @@ insitu.Views.TableRow = insitu.Views.Base.extend({
 		return this;
 	},
 
-	_getCellData: function(column, index){
-		if(_.isset(this.table.rowDataCellFilter) && _.isFunction( this.table.rowDataCellFilter )){
-			return this.table.rowDataCellFilter.call(this.table.context, this.data, column);
+	_show: function(){
+		this.$el.show();
+	},
+
+	_hide: function(){
+		this.remove(); // 640 ms
+		// this.$el.hide();	// 100ms
+	},
+
+	_getColumnId: function(column){
+		if(_.isObject( column ) && _.isset( column.id )){
+			return column.id;
 		}
 
-		if( (this.data instanceof Backbone.Model) && _.isset(column.id) ){
-			return this.data.get(column.id);
-		}
-
-		if( _.isArray( this.data ) ){
-			return this.data[ index ];
+		if( _.isString( column ) ){
+			return column;
 		}
 	},
 
+	// trigger "getting" of row X column data from raw Data
+	// DOES NOT USE INTERNAL HASH
+	_getCellData: function(column, index){
+
+		var cellDate;
+
+		if(_.isset(this.table.rowCellDataGetter) && _.isFunction( this.table.rowCellDataGetter )){
+			cellDate = this.table.rowCellDataGetter.call(this.table.context, this.data, column);
+
+		}else if( (this.data instanceof Backbone.Model) && _.isset(column.id) ){
+			cellDate = this.data.get(column.id);
+
+		}else if( _.isArray( this.data ) ){
+			cellDate = this.data[ index ];
+		}
+
+		// save for faster access
+		this._columnDataHash[ this._getColumnId( column ) ] = cellDate;
+
+		return cellDate;
+	},
+
+	// here we use the internal hash for getting the row X column data
 	getDataByColumn: function(column){
-		var index = this.table.columns.indexOf( column.column );
-		return this._getCellData( column.column, index );
+		var columnId = this._getColumnId( column );
+
+		if(_.isUndefined( this._columnDataHash[ columnId ] )){
+			var index = this.table.columns.indexOf( column.column );
+			this._getCellData( column.column, index );
+		}
+
+		return this._columnDataHash[ columnId ];
+	},
+
+	// Hides / shows row based on a "filter"-data and matching "columns" set
+	// if no "columns" is defined, every column is used as matching partner
+	// custom filter function can be defined (rowFilterCallback)
+	filterRow: function(filter, columns){
+		if(_.isset( this.table.rowFilterCallback ) && _.isFunction( this.table.rowFilterCallback )){
+			this.visible = this.table.rowFilterCallback.call( this.table.context, this.cellDataHash, filter, columns );
+		}else{
+			if( _.isUndefined(columns) ){
+				columns = this.table.columns;
+			}
+
+			this.visible = _.pluralize( columns ).any(function(column){
+				var columnId = this._getColumnId( column );
+				var cellDate = this._columnDataHash[ columnId ];
+
+				switch(typeof(cellDate)){
+					case "number":
+						return cellDate === numeral(filter).value();
+					case "string":
+					case "object":
+						if(_.isNull( cellDate )){
+							return false;
+						}
+						return cellDate.includes(filter);
+				}
+
+			}, this);
+		}
+
+		return this.visible;
 	}
 
 });
 
 
 
+insitu.Views.TableBody = insitu.Views.Base.extend({
+	tagName: "tbody",
+
+	defaults: {
+		parent: undefined,
+		table: 	undefined
+	},
+
+	initialize: function(data){
+		this._fillWithDefault(this, data);
+	},
+
+
+	render: function(){
+		this.removeSubviews();
+		this._subviews = _.pluralize([]);
+
+		this._renderRows(this.table.rows, this.$el);
+
+		return this;
+	},
+
+
+	sortByColumn: function(column){
+		if(this.sortColumn === column){
+			this.sortReverse = !this.sortReverse;
+		}else{
+			this.sortReverse = false;
+			this.sortColumn = column;
+		}
+
+		var sorter = _.isset(this.table.sortCallback)
+			? this.table.sortCallback
+			: this.table.sortNatural && _.isset(_.sortByNat)
+				? _.sortByNat
+				: _.sortBy;
+
+
+		this._subviews = _.pluralize(sorter( this._subviews.values(), function(rowView){
+			var data = rowView.getDataByColumn(column);
+			if( this.sortNatural && _.isString(data) ){
+				data = data.toUpperCase();
+			}
+
+			return data;
+		}, this ));
+
+		if(this.sortReverse){
+			this._subviews.reverse();
+		}
+
+		this._subviews.each(function(rV){
+			this.$el.append(rV.$el);
+		}, this);
+
+	},
+
+
+	filter: function(filter){
+		var $el = $("<"+this.tagName+">");
+
+		this._subviews.each( function(rowView){
+			if( rowView.filterRow( filter ) ){
+				$el.append( rowView.$el );
+			}
+		}, this );
+
+		this.reSetElement($el);
+
+		return this;
+
+	},
+
+	_renderRows: function(data, $el){
+		data.each(function(rowData){
+
+			var rowView = this.appendSubview(
+				insitu.Views.TableRow,
+				{
+					data: 	rowData,
+					table: 	this.table
+				},
+				$el
+			);
+
+			this._subviews.push( rowView );
+
+		}, this);
+
+	}
+
+});
+
 
 
 insitu.Views.Table = insitu.Views.Base.extend({
 
-	template: _.template('<table class="insitutable"><thead></thead><tbody></tbody></table>'),
+	template: _.template('<table class="insitutable"><thead></thead></table>'),
 
 
 	defaults: function(){
@@ -177,7 +338,7 @@ insitu.Views.Table = insitu.Views.Base.extend({
 
 
 			//////////////////////
-			// filter functions //
+			// getter functions //
 			//////////////////////
 
 			// this one filters a unstructured bunch of input data
@@ -187,7 +348,9 @@ insitu.Views.Table = insitu.Views.Base.extend({
 
 			// operates on filter rowData and excerpts data needed for this cell
 			// cell = rowData X column definition
-			rowDataCellFilter: undefined,
+			rowCellDataGetter: undefined,
+
+			rowFilterCallback: undefined,
 
 			//////////////////////////////
 			// row / column definitions //
@@ -277,9 +440,12 @@ insitu.Views.Table = insitu.Views.Base.extend({
 	},
 
 
+	////////////
+	// Render //
+	////////////
+
 	render: function(){
 		var $el = $(this.template({}));
-		this.$tbody = $el.find("tbody");
 		this.$thead = $el.find("thead");
 
 		// Headerrenderer
@@ -287,40 +453,18 @@ insitu.Views.Table = insitu.Views.Base.extend({
 
 		// Bodyrenderer
 		if( _.isset( this.rows ) ){
-			this._renderByRows(this.$tbody);
+			this.tbodyView = this.appendSubview(
+				insitu.Views.TableBody,
+				{
+					table: this
+				},
+				$el
+			);
 		}
 
 		this.reSetElement($el);
 		return this;
 	},
-
-
-	_renderByRows: function($el){
-
-		if(this.sortable && _.isset( this.sortByColId )){
-
-		}
-
-		this.rowViews = [];
-		this.rows.each(function(rowData){
-
-			var rowView = this.appendSubview(
-				insitu.Views.TableRow,
-				{
-					data: 	rowData,
-					table: 	this
-				},
-				$el
-			);
-
-			this.rowViews.push( rowView );
-
-		}, this);
-	},
-
-
-	// _renderByRawData: function(){
-	// },
 
 
 	_renderHeader: function($el){
@@ -351,39 +495,17 @@ insitu.Views.Table = insitu.Views.Base.extend({
 	},
 
 
+	/////////////////////////
+	// Extra Functionality //
+	/////////////////////////
+
 	sortByColumn: function(column){
-		if(this.sortColumn === column){
-			this.sortReverse = !this.sortReverse;
-		}else{
-			this.sortReverse = false;
-			this.sortColumn = column;
-		}
-
-		var sorter = _.isset(this.sortCallback)
-			? this.sortCallback
-			: this.sortNatural && _.isset(_.sortByNat)
-				? _.sortByNat
-				: _.sortBy;
+		this.tbodyView.sortByColumn( column );
+	},
 
 
-		this.$tbody.html("");
-		this.rowViews = sorter( this.rowViews, function(rowView){
-			var data = rowView.getDataByColumn(column);
-			if( this.sortNatural && _.isString(data) ){
-				data = data.toUpperCase();
-			}
-
-			return data;
-		}, this );
-
-		if(this.sortReverse){
-			this.rowViews.reverse();
-		}
-
-		_.each(this.rowViews, function(rV){
-			this.$tbody.append(rV.$el);
-		}, this);
-
+	filterRows: function(filterSet){
+		this.tbodyView.filter( filterSet );
 	},
 
 });
