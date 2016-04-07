@@ -1,4 +1,4 @@
-
+/*globals numeral*/
 insitu.Views.TableCell = insitu.Views.Base.extend({
 	template: _.template("<td></td>"),
 
@@ -18,9 +18,19 @@ insitu.Views.TableCell = insitu.Views.Base.extend({
 	_getCellView: function(){
 		var view;
 		_.any([this.data, this.column, this.table], function(where){
-			if(_.isset(where) && _.isObject(where) && (_.isset(where.view) || _.isset(where.cellView))){
-				view = where.view || where.cellView;
+			view = false;
+			if( _.isset(where)
+				&& _.isObject(where)
+			){
+				if( where instanceof Backbone.Model ){
+					view = where.get("view");
+				}else{
+					view = where.view || where.cellView;
+				}
 			}
+
+			return view;
+
 		}, this);
 
 		return view;
@@ -191,14 +201,15 @@ insitu.Views.TableRow = insitu.Views.Base.extend({
 	// if no "columns" is defined, every column is used as matching partner
 	// custom filter function can be defined (rowFilterCallback)
 	filterRow: function(filter, columns){
+		var newVisibility;
 		if(_.isset( this.table.rowFilterCallback ) && _.isFunction( this.table.rowFilterCallback )){
-			this.visible = this.table.rowFilterCallback.call( this.table.context, this.cellDataHash, filter, columns );
+			newVisibility = this.table.rowFilterCallback.call( this.table.context, this.cellDataHash, filter, columns );
 		}else{
 			if( _.isUndefined(columns) ){
 				columns = this.table.columns;
 			}
 
-			this.visible = _.pluralize( columns ).any(function(column){
+			newVisibility = _.pluralize( columns ).any(function(column){
 				var columnId = this._getColumnId( column );
 				var cellDate = this._columnDataHash[ columnId ];
 
@@ -216,6 +227,11 @@ insitu.Views.TableRow = insitu.Views.Base.extend({
 			}, this);
 		}
 
+		if( this.visible !== newVisibility && newVisibility === true ){
+			this.render();
+		}
+
+		this.visible = newVisibility;
 		return this.visible;
 	}
 
