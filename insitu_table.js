@@ -492,6 +492,14 @@ insitu.Views.Table = insitu.Views.Base.extend({
 			);
 		}
 
+		if( _.isset( this.columnPreHeader ) ){
+			$el.append(
+				_.isFunction(this.columnPreHeader)
+					? this.columnPreHeader.call(this.context)
+					: this.columnPreHeader
+			);
+		}
+
 		this.columns.each(function(column, index){
 
 			var colLabel = _.isset(this.columnLabelCallback) && _.isFunction(this.columnLabelCallback)
@@ -508,6 +516,14 @@ insitu.Views.Table = insitu.Views.Base.extend({
 				$el
 			);
 		}, this);
+
+		if( _.isset( this.columnPostHeader ) ){
+			$el.append(
+				_.isFunction(this.columnPostHeader)
+					? this.columnPostHeader.call(this.context)
+					: this.columnPostHeader
+			);
+		}
 	},
 
 
