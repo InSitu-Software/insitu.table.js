@@ -484,19 +484,24 @@ insitu.Views.Table = insitu.Views.Base.extend({
 
 
 	_renderHeader: function($el){
-		if(_.isset(this.rowLabelCallback)){
-			this.appendSubview(
-				insitu.Views.TableHeaderCell,
-				{table: this, data: ""},
-				$el
-			);
-		}
 
+		// Preheader
 		if( _.isset( this.columnPreHeader ) ){
 			$el.append(
 				_.isFunction(this.columnPreHeader)
 					? this.columnPreHeader.call(this.context)
 					: this.columnPreHeader
+			);
+		}
+
+
+		// general header
+		var $headerRow = $("<tr>");
+		if(_.isset(this.rowLabelCallback)){
+			this.appendSubview(
+				insitu.Views.TableHeaderCell,
+				{table: this, data: ""},
+				$headerRow
 			);
 		}
 
@@ -513,10 +518,14 @@ insitu.Views.Table = insitu.Views.Base.extend({
 					table: 		this,
 					column: 	column
 				},
-				$el
+				$headerRow
 			);
 		}, this);
 
+		$el.append($headerRow);
+
+
+		// PostHeader
 		if( _.isset( this.columnPostHeader ) ){
 			$el.append(
 				_.isFunction(this.columnPostHeader)
