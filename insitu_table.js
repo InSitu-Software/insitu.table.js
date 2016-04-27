@@ -88,7 +88,8 @@ insitu.Views.TableHeaderCell = insitu.Views.TableCell.extend({
 		}
 
 		event.stopPropagation();
-		this.table.sortByColumn(this.column);
+		var sorting = this.table.sortByColumn(this.column);
+		this.table.indicateSorting(this, sorting);
 	}
 });
 
@@ -187,6 +188,10 @@ insitu.Views.TableRow = insitu.Views.Base.extend({
 
 	// here we use the internal hash for getting the row X column data
 	getDataByColumn: function(column){
+		if(_.isUndefined( column )){
+			return this.$el.find("th").text();	// kind of hacky...
+		}
+
 		var columnId = this._getColumnId( column );
 
 		if(_.isUndefined( this._columnDataHash[ columnId ] )){
@@ -294,6 +299,10 @@ insitu.Views.TableBody = insitu.Views.Base.extend({
 			this.$el.append(rV.$el);
 		}, this);
 
+		return this.sortReverse
+			? "DESC"
+			: "ASC";
+
 	},
 
 
@@ -334,9 +343,77 @@ insitu.Views.TableBody = insitu.Views.Base.extend({
 
 
 
+insitu.Views.TableHead = insitu.Views.Base.extend({
+	tagName: "thead",
+
+	defaults: {
+		parent: undefined,
+		table: 	undefined
+	},
+
+	initialize: function(data){
+		this._fillWithDefault(this, data);
+	},
+
+	render: function(){
+		// Preheader
+		if( _.isset( this.table.columnPreHeader ) ){
+			this.$el.append(
+				_.isFunction(this.columnPreHeader)
+					? this.table.columnPreHeader.call(this.table.context)
+					: this.table.columnPreHeader
+			);
+		}
+
+
+		// general header
+		var $headerRow = $("<tr>");
+		if(_.isset(this.table.rowLabelCallback)){
+			this.appendSubview(
+				insitu.Views.TableHeaderCell,
+				{table: this.table, data: ""},
+				$headerRow
+			);
+		}
+
+		this.table.columns.each(function(column, index){
+
+			var colLabel = _.isset(this.table.columnLabelCallback) && _.isFunction(this.table.columnLabelCallback)
+				? this.table.columnLabelCallback.call(this.table.context, column)
+				: column;
+
+			this.appendSubview(
+				insitu.Views.TableHeaderCell,
+				{
+					data: 		colLabel,
+					table: 		this.table,
+					column: 	column
+				},
+				$headerRow
+			);
+		}, this);
+
+		this.$el.append($headerRow);
+
+
+		// PostHeader
+		if( _.isset( this.table.columnPostHeader ) ){
+			this.$el.append(
+				_.isFunction(this.table.columnPostHeader)
+					? this.table.columnPostHeader.call(this.table.context)
+					: this.table.columnPostHeader
+			);
+		}
+
+		return this;
+	}
+});
+
+
+
 insitu.Views.Table = insitu.Views.Base.extend({
 
-	template: _.template('<table class="insitutable"><thead></thead></table>'),
+	template: _.template('<table class="insitutable"></table>'),
 
 
 	defaults: function(){
@@ -462,10 +539,16 @@ insitu.Views.Table = insitu.Views.Base.extend({
 
 	render: function(){
 		var $el = $(this.template({}));
-		this.$thead = $el.find("thead");
+
 
 		// Headerrenderer
-		this._renderHeader(this.$thead);
+		this.headView = this.appendSubview(
+			insitu.Views.TableHead,
+			{
+				table: this
+			},
+			$el
+		);
 
 		// Bodyrenderer
 		if( _.isset( this.rows ) ){
@@ -483,65 +566,12 @@ insitu.Views.Table = insitu.Views.Base.extend({
 	},
 
 
-	_renderHeader: function($el){
-
-		// Preheader
-		if( _.isset( this.columnPreHeader ) ){
-			$el.append(
-				_.isFunction(this.columnPreHeader)
-					? this.columnPreHeader.call(this.context)
-					: this.columnPreHeader
-			);
-		}
-
-
-		// general header
-		var $headerRow = $("<tr>");
-		if(_.isset(this.rowLabelCallback)){
-			this.appendSubview(
-				insitu.Views.TableHeaderCell,
-				{table: this, data: ""},
-				$headerRow
-			);
-		}
-
-		this.columns.each(function(column, index){
-
-			var colLabel = _.isset(this.columnLabelCallback) && _.isFunction(this.columnLabelCallback)
-				? this.columnLabelCallback.call(this.context, column)
-				: column;
-
-			this.appendSubview(
-				insitu.Views.TableHeaderCell,
-				{
-					data: 		colLabel,
-					table: 		this,
-					column: 	column
-				},
-				$headerRow
-			);
-		}, this);
-
-		$el.append($headerRow);
-
-
-		// PostHeader
-		if( _.isset( this.columnPostHeader ) ){
-			$el.append(
-				_.isFunction(this.columnPostHeader)
-					? this.columnPostHeader.call(this.context)
-					: this.columnPostHeader
-			);
-		}
-	},
-
-
 	/////////////////////////
 	// Extra Functionality //
 	/////////////////////////
 
 	sortByColumn: function(column){
-		this.tbodyView.sortByColumn( column );
+		return this.tbodyView.sortByColumn( column );
 	},
 
 
@@ -549,5 +579,45 @@ insitu.Views.Table = insitu.Views.Base.extend({
 		this.tbodyView.filter( filterSet );
 	},
 
+	indicateSorting: function(headerView, sorting){
+		if(_.isset( this.indicatorView )){
+			this.indicatorView.remove();
+		}
+
+		this.indicatorView = headerView.appendSubview(
+			insitu.Views.SortIndicator,
+			{
+				sorting: sorting
+			},
+			headerView.$el
+		);
+	}
+
 });
 
+insitu.Views.SortIndicator = insitu.Views.Base.extend({
+	tagName: "span",
+	className: "sortingIndicator",
+
+	defaults: {
+		parent: undefined,
+		sorting: "ASC"
+	},
+
+	initialize: function(data){
+		this._fillWithDefault(this, data);
+	},
+
+	render: function(){
+		this.$el = $(document.createElement(this.tagName));
+		this.$el.addClass(this.className);
+
+		this.$el.addClass(
+			this.sorting === "ASC"
+				? "ascending"
+				: "descending"
+		);
+
+		return this;
+	}
+});
