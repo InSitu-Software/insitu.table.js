@@ -168,22 +168,26 @@ insitu.Views.TableRow = insitu.Views.Base.extend({
 	// DOES NOT USE INTERNAL HASH
 	_getCellData: function(column, index){
 
-		var cellDate;
+		var cellData;
 
 		if(_.isset(this.table.rowCellDataGetter) && _.isFunction( this.table.rowCellDataGetter )){
-			cellDate = this.table.rowCellDataGetter.call(this.table.context, this.data, column);
+			cellData = this.table.rowCellDataGetter.call(this.table.context, this.data, column);
 
 		}else if( (this.data instanceof Backbone.Model) && _.isset(column.id) ){
-			cellDate = this.data.get(column.id);
+			cellData = this.data.get(column.id);
 
 		}else if( _.isArray( this.data ) ){
-			cellDate = this.data[ index ];
+			cellData = this.data[ index ];
+
+		}else if( _.isObject( this.data ) ){
+			cellData = this.data[ column ];
+
 		}
 
 		// save for faster access
-		this._columnDataHash[ this._getColumnId( column ) ] = cellDate;
+		this._columnDataHash[ this._getColumnId( column ) ] = cellData;
 
-		return cellDate;
+		return cellData;
 	},
 
 	// here we use the internal hash for getting the row X column data
