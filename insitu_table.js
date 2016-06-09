@@ -8,7 +8,8 @@ insitu.Views.TableCell = insitu.Views.Base.extend({
 		parent: undefined,
 		data: undefined,
 		table: undefined,
-		column: undefined
+		column: undefined,
+		row: undefined
 	},
 
 	initialize: function(data){
@@ -17,7 +18,7 @@ insitu.Views.TableCell = insitu.Views.Base.extend({
 
 	_getCellView: function(){
 		var view;
-		if (this.data) {
+		if (typeof this.data != "undefined") {
 			_.any([this.data, this.column, this.table], function(where){
 				view = false;
 				if( _.isset(where)
@@ -38,18 +39,45 @@ insitu.Views.TableCell = insitu.Views.Base.extend({
 		return view;
 	},
 
+	_getCellViewOptions: function(){
+		var viewOptions = {};
+		if (typeof this.data != "undefined") {
+			_.any([this.data, this.column, this.table], function(where){
+				viewOptions = false;
+				if( _.isset(where)
+					&& _.isObject(where)
+				){
+					if( where instanceof Backbone.Model ){
+						viewOptions = where.get("viewOptions");
+					}else{
+						viewOptions = where.viewOptions || where.cellViewOptions;
+					}
+				}
+
+				return viewOptions;
+
+			}, this);
+		}
+
+		return viewOptions;
+	},
+
+
 	render: function(){
 		var $el = $(this.template({}));
 
 		var cellView = this._getCellView();
+		var cellViewOptions = this._getCellViewOptions();
 
 		if(_.isset(cellView) && _.isFunction(cellView)){
 			this.appendSubview(
 				cellView,
-				{
+				_.extend({
 					data: this.data,
 					table: this.table,
-				},
+					column: this.column,
+					row: this.row
+				}, cellViewOptions),
 				$el
 			);
 		}else{
@@ -139,7 +167,8 @@ insitu.Views.TableRow = insitu.Views.Base.extend({
 				{
 					data: 	cellData,
 					table: 	this.table,
-					column: column
+					column: column,
+					row: this.data
 				},
 				$el
 			);
@@ -286,8 +315,8 @@ insitu.Views.TableBody = insitu.Views.Base.extend({
 		var sorter = _.isset(this.table.sortCallback)
 			? this.table.sortCallback
 			: this.table.sortNatural && _.isset(_.sortByNat)
-				? _.sortByNat
-				: _.sortBy;
+			? _.sortByNat
+			: _.sortBy;
 
 
 		this._subviews = _.pluralize(sorter( this._subviews.values(), function(rowView){
@@ -463,6 +492,7 @@ insitu.Views.Table = insitu.Views.Base.extend({
 			// 		id: 	needed on columns, on parameter for filterFunction
 			// 		view: 	n/a for row, column can specify a distinct BB-View for this column,
 			// 				if not set, "cellView" is used
+			// 		viewOptions: options for the view constructor
 			// 		data: 	n/a for columns, if set for rows, no filtering etc is done, this
 			// 				value is plainly outputed / given to cellView
 			// 	},
@@ -487,6 +517,8 @@ insitu.Views.Table = insitu.Views.Base.extend({
 			// if not defined and not special column-view is defined,
 			// output of cellFilter will be plainly written into the cell
 			cellView: undefined,
+			// options for the cellView constructor
+			cellViewOptions: {},
 
 
 			//////////////////////
@@ -518,7 +550,12 @@ insitu.Views.Table = insitu.Views.Base.extend({
 			// housekeeping //
 			//////////////////
 			parent: undefined,
-			context: this
+			context: this,
+
+			// if rows is a backbone collection,
+			// listens for backbone events and renders
+			// when dataset changes
+			listenForChanges: false
 		};
 	},
 
@@ -538,6 +575,12 @@ insitu.Views.Table = insitu.Views.Base.extend({
 				: this[key] || undefined;
 		}, this);
 
+		if (this.listenForChanges && this.rows instanceof Backbone.Collection) {
+			this.rows.on({
+				'update' : this.render,
+				'reset' : this.render
+			}, this);
+		}
 	},
 
 
