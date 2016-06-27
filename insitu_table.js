@@ -576,10 +576,8 @@ insitu.Views.Table = insitu.Views.Base.extend({
 		}, this);
 
 		if (this.listenForChanges && this.rows instanceof Backbone.Collection) {
-			this.rows.on({
-				'update' : this.render,
-				'reset' : this.render
-			}, this);
+			this.listenTo(this.rows, "update", this.render);
+			this.listenTo(this.rows, "reset", this.render);
 		}
 	},
 
