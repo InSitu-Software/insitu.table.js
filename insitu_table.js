@@ -255,14 +255,16 @@ insitu.Views.TableRow = insitu.Views.Base.extend({
 				var columnId = this._getColumnId( column );
 				var cellDate = this._columnDataHash[ columnId ];
 
+				if(_.isNull( cellDate )){
+					return false;
+				}
+
 				switch(typeof(cellDate)){
 					case "number":
 						return cellDate === numeral(filter).value();
 					case "string":
+						return cellDate.toUpperCase().includes(filter.toUpperCase());
 					case "object":
-						if(_.isNull( cellDate )){
-							return false;
-						}
 						return cellDate.includes(filter);
 				}
 
