@@ -18,23 +18,22 @@ insitu.Views.TableCell = insitu.Views.Base.extend({
 
 	_getCellView: function(){
 		var view;
-		if (typeof this.data != "undefined") {
-			_.any([this.data, this.column, this.table], function(where){
-				view = false;
-				if( _.isset(where)
-					&& _.isObject(where)
-				){
-					if( where instanceof Backbone.Model ){
-						view = where.get("view");
-					}else{
-						view = where.view || where.cellView;
-					}
+		
+		_.any([this.data, this.column, this.table], function(where){
+			view = false;
+			if( _.isset(where)
+				&& _.isObject(where)
+			){
+				if( where instanceof Backbone.Model ){
+					view = where.get("view");
+				}else{
+					view = where.view || where.cellView;
 				}
+			}
 
-				return view;
+			return view;
 
-			}, this);
-		}
+		}, this);
 
 		return view;
 	},
