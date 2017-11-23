@@ -18,7 +18,7 @@ insitu.Views.TableCell = insitu.Views.Base.extend({
 
 	_getCellView: function(){
 		var view;
-		
+
 		_.any([this.data, this.column, this.table], function(where){
 			view = false;
 			if( _.isset(where)
@@ -347,11 +347,22 @@ insitu.Views.TableBody = insitu.Views.Base.extend({
 	filter: function(filter){
 		var $el = $("<"+this.tagName+">");
 
+		var filterMatches = [];
 		this._subviews.each( function(rowView){
 			if( rowView.filterRow( filter ) ){
-				$el.append( rowView.$el );
+				filterMatches.push(rowView);
 			}
 		}, this );
+
+		if(
+			this.table.maxRows !== false
+			&& this.table.maxRows > filterMatches.length
+		){
+			_.each(filterMatches, function(m){
+				var el = m.render().$el;
+				el.appendTo($el);
+			}, this);
+		}
 
 		this.reSetElement($el);
 
@@ -360,18 +371,25 @@ insitu.Views.TableBody = insitu.Views.Base.extend({
 	},
 
 	_renderRows: function(data, $el){
+		var append = true;
+		if( this.table.maxRows !== false ) {
+			if( data.length > this.table.maxRows ) {
+				append = false;
+			}
+		}
+
 		data.each(function(rowData){
 
-			var rowView = this.appendSubview(
-				insitu.Views.TableRow,
-				{
-					data: 	rowData,
-					table: 	this.table
-				},
-				$el
-			);
+			var rowView = new insitu.Views.TableRow({
+				data: 	rowData,
+				table: 	this.table
+			}).render();
 
 			this._subviews.push( rowView );
+
+			if (append) {
+				rowView.render().$el.appendTo($el);
+			}
 
 		}, this);
 
@@ -466,7 +484,7 @@ insitu.Views.Table = insitu.Views.Base.extend({
 			// data input by row, so we expect an iterable data structure
 			// in which every iteratee describes on row
 			// rowData: undefined,
-
+			maxRows: false,
 
 			//////////////////////
 			// getter functions //
